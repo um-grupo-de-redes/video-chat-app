@@ -1,0 +1,10 @@
+version: '3'
+
+chat:
+  build:
+    context: ./chat
+    dockerfile: ./Dockerfile
+  container_name: production_chat
+  restart: always
+  ports:
+    - 8005:8005
