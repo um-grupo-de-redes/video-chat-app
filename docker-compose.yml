@@ -4,56 +4,57 @@ volumes:
   production_certbot_www: {}
   production_certbot_conf: {}
 
-chat:
-  build:
-    context: ./chat
-    dockerfile: ./Dockerfile
-  container_name: production_chat
-  restart: always
-  networks:
-    - nginx-access
+services:
+  chat:
+    build:
+      context: ./chat
+      dockerfile: ./Dockerfile
+    container_name: production_chat
+    restart: always
+    networks:
+      - nginx-access
 
-nginx:
-  build:
-    context: ./nginx
-    dockerfile: ./Dockerfile
-  image: production_nginx
-  container_name: production_nginx
-  restart: "always"
-  env_file:
-    - ./.envs/production/server_name
-  ports:
-    - '80:80'
-    - "443:443/tcp"
-    # - "443:443/udp"
-  networks:
-    - nginx-access
-  volumes:
-    - production_certbot_www:/var/www/certbot/:ro
-    - production_certbot_conf:/etc/nginx/ssl/:ro
-  healthcheck:
-    test: ps | grep "nginx" | grep "worker process" | grep -v "grep"
-    interval: 10s
-    retries: 10
-    start_period: 3s
-    timeout: 5s
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: ./Dockerfile
+    image: production_nginx
+    container_name: production_nginx
+    restart: "always"
+    env_file:
+      - ./.envs/production/server_name
+    ports:
+      - '80:80'
+      - "443:443/tcp"
+      # - "443:443/udp"
+    networks:
+      - nginx-access
+    volumes:
+      - production_certbot_www:/var/www/certbot/:ro
+      - production_certbot_conf:/etc/nginx/ssl/:ro
+    healthcheck:
+      test: ps | grep "nginx" | grep "worker process" | grep -v "grep"
+      interval: 10s
+      retries: 10
+      start_period: 3s
+      timeout: 5s
 
-certbot:
-  build:
-    context: ./certbot
-    dockerfile: ./Dockerfile
-  image: production_certbot
-  container_name: production_certbot
-  restart: "always"
-  depends_on:
-    nginx:
-      condition: service_healthy
-  env_file:
-    - ./.envs/production/server_name
-    - ./.envs/production/email
-  volumes:
-    - production_certbot_www:/var/www/certbot/:rw
-    - production_certbot_conf:/etc/letsencrypt/:rw
+  certbot:
+    build:
+      context: ./certbot
+      dockerfile: ./Dockerfile
+    image: production_certbot
+    container_name: production_certbot
+    restart: "always"
+    depends_on:
+      nginx:
+        condition: service_healthy
+    env_file:
+      - ./.envs/production/server_name
+      - ./.envs/production/email
+    volumes:
+      - production_certbot_www:/var/www/certbot/:rw
+      - production_certbot_conf:/etc/letsencrypt/:rw
 
 networks:
   nginx-access:

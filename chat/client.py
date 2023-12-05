@@ -1,11 +1,13 @@
 import time
 import traceback
 import argparse
-from threading import Thread, Lock
+from threading import Thread
 
+import cv2
 from websockets.sync.client import connect
 
 from msgs import *
+from img_codec import *
 
 stopped_g = False
 
@@ -44,18 +46,44 @@ def join_room(websocket, room_id):
     return joined
 
 # Receive chat messages
-def receive_content_in_parallel(websocket):
+def receive_msg_in_parallel(websocket):
+    global stopped_g
     while not stopped_g:
         try:
             message = websocket.recv()
             message = Message.from_json(message)
-            if message.action != ACTION_CONTENT:
-                continue
-            print(message.content)
+            if message.action == ACTION_CONTENT:
+                print(message.content)
+            elif message.action == ACTION_FRAME:
+                if type(message.sender) == str:
+                    sender = message.sender[:15]
+                else:
+                    continue
+                frame = decode_image(message.frame)
+                # TODO: a grid instead of multiple windows
+                cv2.imshow(sender, frame)
+                cv2.waitKey(1)  # milliseconds
         except TimeoutError:
             pass
 
-def finite_state_machine(websocket):
+def send_video_in_parallel(websocket, video_source, video_fps):
+    global stopped_g
+    while not stopped_g:
+        start_time = time.time()
+        ret, frame = video_source.read()
+        if not ret:
+            print("Failed to read camera")
+            time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
+            continue
+        frame = encode_image(frame)
+        send_message(
+            websocket=websocket,
+            message=MessageFrame(action=ACTION_FRAME, frame=frame, sender=None)  # the server already knows the sender username
+        )
+        time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
+
+def finite_state_machine(websocket, video_source, video_fps):
+    global stopped_g
     reached_in_room_state = False
     state = STATE_CHOOSE_USERNAME
     while not stopped_g:
@@ -110,10 +138,17 @@ def finite_state_machine(websocket):
                 print("The joined room ID is:", room_id)
                 # Start receiving room messages in parallel
                 receiver_thread = Thread(
-                    target=receive_content_in_parallel,
+                    target=receive_msg_in_parallel,
                     args=(websocket, )
                 )
                 receiver_thread.start()
+                if video_source is not None:
+                    print("Started sending video")
+                    send_video_thread = Thread(
+                        target=send_video_in_parallel,
+                        args=(websocket, video_source, video_fps, )
+                    )
+                    send_video_thread.start()
             content = input()  # blocks waiting for input
             send_message(
                 websocket=websocket,
@@ -121,10 +156,15 @@ def finite_state_machine(websocket):
             )
 
 
-def main(ip, port):
+def main(stream_video, server_uri, video_device, video_fps):
+    global stopped_g
     try:
-        websocket = connect(f"ws://{ip}:{port}")  # establish a connection
-        finite_state_machine(websocket)
+        websocket = connect(server_uri)  # establish a connection
+        video_source = None
+        if stream_video:
+            print("Started capturing video")
+            video_source = cv2.VideoCapture(video_device)
+        finite_state_machine(websocket, video_source, video_fps)
     except:
         if DEBUG:
             traceback.print_exc()
@@ -133,6 +173,8 @@ def main(ip, port):
         print("Closing...")
         stopped_g = True
         websocket.close()
+        video_source.release()
+        cv2.destroyAllWindows()
         exit()
     
 def parse_args():
@@ -140,14 +182,24 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     ap.add_argument(
-        "--ip",
-        type=str, default="localhost",
-        help="IP or DNS of the websocket"
+        "--stream-video",
+        action='store_true', default=False,
+        help="Wether to stream video to the room. Can still receive video"
     )
     ap.add_argument(
-        "--port",
-        type=int, default=8005,
-        help="Ephemeral port number of the websocket (1024 to 65535)"
+        "--server-uri",
+        type=str, default="ws://localhost:8005",
+        help="Websocket server URI (like 'wss://18.231.183.136.sslip.io')"
+    )
+    ap.add_argument(
+        "--video-device",
+        type=str, default="/dev/video0",
+        help="Which device to get the video from"
+    )
+    ap.add_argument(
+        "--video-fps",
+        type=int, default=24,
+        help="Video frames per second"
     )
     args = ap.parse_args()
     return args

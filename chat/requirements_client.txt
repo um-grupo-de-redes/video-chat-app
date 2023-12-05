@@ -1,0 +1,2 @@
+opencv-contrib-python==4.5.3.56
+simplejpeg==1.7

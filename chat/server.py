@@ -4,6 +4,7 @@ import argparse
 
 import asyncio
 from websockets.server import serve
+from websockets.exceptions import ConnectionClosedOK
 
 from msgs import *
 
@@ -25,7 +26,10 @@ def generate_unique_id():
 
 async def send_message(websocket, message):
     message = message.to_json()
-    await websocket.send(message)
+    try:
+        await websocket.send(message)
+    except ConnectionClosedOK:
+        pass
 
 client_dict = {}
 map_room_id_to_client_list = {}
@@ -33,6 +37,7 @@ map_room_id_to_client_list = {}
 async def handler(websocket):
     client_dict[websocket] = Client(websocket)
     try:
+        # TODO: maybe rate limit, at this layer, to avoid DDoS
         async for message in websocket:
             message = Message.from_json(message)
             if message.action == ACTION_CHECK_USERNAME:
@@ -86,6 +91,18 @@ async def handler(websocket):
                         client.websocket,
                         MessageContent(action=ACTION_CONTENT, content="@" + username + ": " + message.content)
                     )
+            elif message.action == ACTION_FRAME:
+                room_id = client_dict[websocket].room_id
+                username = client_dict[websocket].username
+                # TODO: maybe some frame validation
+                # Send frame to the right room
+                for client in map_room_id_to_client_list[room_id]:
+                    if client.username == username:
+                        continue
+                    await send_message(
+                        client.websocket,
+                        MessageFrame(action=ACTION_FRAME, sender=username, frame=message.frame)
+                    )
     except:
         if DEBUG:
             traceback.print_exc()
@@ -95,6 +112,7 @@ async def handler(websocket):
 
 async def spin_server(ip, port):
     async with serve(handler, ip, port):
+        print("Handling messages...")
         await asyncio.Future()  # run forever
 
 def main(ip, port):
