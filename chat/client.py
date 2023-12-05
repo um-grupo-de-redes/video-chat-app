@@ -5,24 +5,36 @@ from threading import Thread
 
 import cv2
 from websockets.sync.client import connect
+from websockets.exceptions import ConnectionClosedOK
 
 from msgs import *
 from img_codec import *
 
 stopped_g = False
 
-# Message sending
+# Basic message sending/receiving
+def receive_message(websocket):
+    try:
+        message = websocket.recv()
+    except ConnectionClosedOK:
+        return None
+    message = Message.from_json(message)
+    return message
+
 def send_message(websocket, message):
     message = message.to_json()
-    websocket.send(message)
+    try:
+        websocket.send(message)
+    except ConnectionClosedOK:
+        pass
 
+# Specific message sending/receiving
 def check_username(websocket, username):
     send_message(
         websocket=websocket,
         message=MessageUsername(action=ACTION_CHECK_USERNAME, username=username)
     )
-    message = websocket.recv()
-    message = Message.from_json(message)
+    message = receive_message(websocket)
     ok = message.boolean
     return ok  # wether the username is ok (e.g is not a duplicate)
 
@@ -31,8 +43,7 @@ def request_new_room(websocket):
         websocket=websocket,
         message=MessageRoom(action=ACTION_CREATE_ROOM, room_id=None)
     )
-    message = websocket.recv()
-    message = Message.from_json(message)
+    message = receive_message(websocket)
     return message.room_id
 
 def join_room(websocket, room_id):
@@ -40,18 +51,42 @@ def join_room(websocket, room_id):
         websocket=websocket,
         message=MessageRoom(action=ACTION_JOIN_ROOM, room_id=room_id)
     )
-    message = websocket.recv()
-    message = Message.from_json(message)
+    message = receive_message(websocket)
     joined = message.boolean
     return joined
 
-# Receive chat messages
-def receive_msg_in_parallel(websocket):
+def send_content(websocket, content):
+    send_message(
+        websocket=websocket,
+        message=MessageContent(action=ACTION_CONTENT, content=content)
+    )
+
+def send_frame(websocket, frame):
+    frame = encode_image(frame)
+    send_message(
+        websocket=websocket,
+        message=MessageFrame(action=ACTION_FRAME, frame=frame, sender=None)  # the server already knows the sender username
+    )
+
+# Send video frames
+def send_video_in_parallel(websocket, video_source, video_fps):
+    global stopped_g
+    while not stopped_g:
+        start_time = time.time()
+        ret, frame = video_source.read()
+        if not ret:
+            print("Failed to read camera")
+            time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
+            continue
+        send_frame(websocket, frame)
+        time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
+
+# Receive messages, and print chat messages to the screen
+def message_handler(websocket):
     global stopped_g
     while not stopped_g:
         try:
-            message = websocket.recv()
-            message = Message.from_json(message)
+            message = receive_message(websocket)
             if message.action == ACTION_CONTENT:
                 print(message.content)
             elif message.action == ACTION_FRAME:
@@ -66,22 +101,7 @@ def receive_msg_in_parallel(websocket):
         except TimeoutError:
             pass
 
-def send_video_in_parallel(websocket, video_source, video_fps):
-    global stopped_g
-    while not stopped_g:
-        start_time = time.time()
-        ret, frame = video_source.read()
-        if not ret:
-            print("Failed to read camera")
-            time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
-            continue
-        frame = encode_image(frame)
-        send_message(
-            websocket=websocket,
-            message=MessageFrame(action=ACTION_FRAME, frame=frame, sender=None)  # the server already knows the sender username
-        )
-        time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
-
+# Chat application
 def finite_state_machine(websocket, video_source, video_fps):
     global stopped_g
     reached_in_room_state = False
@@ -138,7 +158,7 @@ def finite_state_machine(websocket, video_source, video_fps):
                 print("The joined room ID is:", room_id)
                 # Start receiving room messages in parallel
                 receiver_thread = Thread(
-                    target=receive_msg_in_parallel,
+                    target=message_handler,
                     args=(websocket, )
                 )
                 receiver_thread.start()
@@ -150,10 +170,7 @@ def finite_state_machine(websocket, video_source, video_fps):
                     )
                     send_video_thread.start()
             content = input()  # blocks waiting for input
-            send_message(
-                websocket=websocket,
-                message=MessageContent(action=ACTION_CONTENT, content=content)
-            )
+            send_content(websocket, content)
 
 
 def main(stream_video, server_uri, video_device, video_fps):

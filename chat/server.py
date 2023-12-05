@@ -34,7 +34,7 @@ async def send_message(websocket, message):
 client_dict = {}
 map_room_id_to_client_list = {}
 
-async def handler(websocket):
+async def message_handler(websocket):
     client_dict[websocket] = Client(websocket)
     try:
         # TODO: maybe rate limit, at this layer, to avoid DDoS
@@ -111,7 +111,7 @@ async def handler(websocket):
         del client_dict[websocket]
 
 async def spin_server(ip, port):
-    async with serve(handler, ip, port):
+    async with serve(message_handler, ip, port):
         print("Handling messages...")
         await asyncio.Future()  # run forever
 
