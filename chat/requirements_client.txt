@@ -1,2 +1,5 @@
 opencv-contrib-python==4.5.3.56
 simplejpeg==1.7
+SoundFile==0.10.*
+# sounddevice requires 'sudo apt install libportaudio2'
+sounddevice==0.4.*

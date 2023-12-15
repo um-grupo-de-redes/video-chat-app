@@ -91,7 +91,7 @@ async def message_handler(websocket):
                         client.websocket,
                         MessageContent(action=ACTION_CONTENT, content="@" + username + ": " + message.content)
                     )
-            elif message.action == ACTION_FRAME:
+            elif message.action == ACTION_IMAGE_FRAME:
                 room_id = client_dict[websocket].room_id
                 username = client_dict[websocket].username
                 # TODO: maybe some frame validation
@@ -101,7 +101,19 @@ async def message_handler(websocket):
                         continue
                     await send_message(
                         client.websocket,
-                        MessageFrame(action=ACTION_FRAME, sender=username, frame=message.frame)
+                        MessageImageFrame(action=ACTION_IMAGE_FRAME, sender=username, frame=message.frame)
+                    )
+            elif message.action == ACTION_AUDIO_FRAME:
+                room_id = client_dict[websocket].room_id
+                username = client_dict[websocket].username
+                # TODO: maybe some audio frame validation
+                # Send audio frame to the right room
+                for client in map_room_id_to_client_list[room_id]:
+                    if client.username == username:
+                        continue
+                    await send_message(
+                        client.websocket,
+                        MessageAudioFrame(action=ACTION_AUDIO_FRAME, sender=username, frame=message.frame)
                     )
     except:
         if DEBUG:

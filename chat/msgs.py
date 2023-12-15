@@ -55,18 +55,25 @@ class MessageBoolean(Message):
         self.boolean = boolean
 
 
-class MessageFrame(Message):
-    def __init__(self, action, frame, sender, type_=TYPE_MESSAGE_FRAME):
+class MessageImageFrame(Message):
+    def __init__(self, action, frame, sender, type_=TYPE_MESSAGE_IMAGE_FRAME):
         super().__init__(action=action, type_=type_)
         self.frame = frame
         self.sender = sender
 
+
+class MessageAudioFrame(Message):
+    def __init__(self, action, frame, sender, type_=TYPE_MESSAGE_AUDIO_FRAME):
+        super().__init__(action=action, type_=type_)
+        self.frame = frame
+        self.sender = sender
 
 TYPE_TO_MSG = {
     TYPE_MESSAGE_CONTENT: MessageContent,
     TYPE_MESSAGE_ROOM: MessageRoom,
     TYPE_MESSAGE_USERNAME: MessageUsername,
     TYPE_MESSAGE_BOOLEAN: MessageBoolean,
-    TYPE_MESSAGE_FRAME: MessageFrame,
+    TYPE_MESSAGE_IMAGE_FRAME: MessageImageFrame,
+    TYPE_MESSAGE_AUDIO_FRAME: MessageAudioFrame,
 }
 

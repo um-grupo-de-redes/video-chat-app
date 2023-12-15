@@ -1,16 +1,22 @@
 import time
 import traceback
 import argparse
-from threading import Thread
+from threading import Thread, Lock
+from functools import partial
 
 import cv2
+import sounddevice as sd
+import numpy as np
+
 from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosedOK
 
 from msgs import *
-from img_codec import *
+from codec_img import encode_image, decode_image
+from codec_audio import encode_audio_raw, decode_audio
 
 stopped_g = False
+sender_audio_dict_lock = Lock()
 
 # Basic message sending/receiving
 def receive_message(websocket):
@@ -61,11 +67,18 @@ def send_content(websocket, content):
         message=MessageContent(action=ACTION_CONTENT, content=content)
     )
 
-def send_frame(websocket, frame):
+def send_image_frame(websocket, frame):
     frame = encode_image(frame)
     send_message(
         websocket=websocket,
-        message=MessageFrame(action=ACTION_FRAME, frame=frame, sender=None)  # the server already knows the sender username
+        message=MessageImageFrame(action=ACTION_IMAGE_FRAME, frame=frame, sender=None)  # the server already knows the sender username
+    )
+
+def send_audio_frame(websocket, frame):
+    frame = encode_audio_raw(frame)
+    send_message(
+        websocket=websocket,
+        message=MessageAudioFrame(action=ACTION_AUDIO_FRAME, frame=frame, sender=None)  # the server already knows the sender username
     )
 
 # Send video frames
@@ -78,18 +91,56 @@ def send_video_in_parallel(websocket, video_source, video_fps):
             print("Failed to read camera")
             time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
             continue
-        send_frame(websocket, frame)
+        send_image_frame(websocket, frame)
         time.sleep(max((1 / video_fps) - time.time() + start_time, 0))  # TODO: substitute with ensure_loop_rate()
 
-# Receive messages, and print chat messages to the screen
+# Send audio frames
+warned_input_overflow = False
+def audio_input_stream_cb(indata, frames, timeobj, status, websocket):
+    global warned_input_overflow
+    if status.input_overflow and not warned_input_overflow:
+        warned_input_overflow = True
+        print('WARNING: INPUT OVERFLOW')
+    send_audio_frame(websocket, indata[:])
+
+# Play audio in parallel
+sender_audio_dict = {}
+
+def play_audio_in_parallel(audio_output_stream):
+    global stopped_g
+    global sender_audio_dict, sender_audio_dict_lock
+
+    audio_output_stream.start()
+
+    frame = np.zeros((audio_output_stream.blocksize, 1), dtype=np.float32)
+    while not stopped_g:
+        i = 0
+        frame[::] = 0
+        sender_audio_dict_lock.acquire()
+        for sender, v in sender_audio_dict.items():
+            if v['played']:
+                continue
+            i += 1
+            frame += decode_audio(v['frame'])
+            sender_audio_dict[sender]['played'] = True
+        sender_audio_dict_lock.release()
+        if i > 0:
+            frame /= i
+            print("playing")
+            audio_output_stream.write(frame)
+
+# Receive all messages (text, video and audio), printing text and showing videos
 def message_handler(websocket):
     global stopped_g
+    global sender_audio_dict, sender_audio_dict_lock
     while not stopped_g:
         try:
             message = receive_message(websocket)
-            if message.action == ACTION_CONTENT:
+            if message is None:
+                continue
+            elif message.action == ACTION_CONTENT:
                 print(message.content)
-            elif message.action == ACTION_FRAME:
+            elif message.action == ACTION_IMAGE_FRAME:
                 if type(message.sender) == str:
                     sender = message.sender[:15]
                 else:
@@ -98,11 +149,23 @@ def message_handler(websocket):
                 # TODO: a grid instead of multiple windows
                 cv2.imshow(sender, frame)
                 cv2.waitKey(1)  # milliseconds
+            elif message.action == ACTION_AUDIO_FRAME:
+                if type(message.sender) == str:
+                    sender = message.sender[:15]
+                else:
+                    continue
+                # Support multiple senders
+                sender_audio_dict_lock.acquire()
+                if message.sender not in sender_audio_dict.keys():
+                    sender_audio_dict[message.sender] = {}
+                sender_audio_dict[message.sender]['frame'] = message.frame[:]
+                sender_audio_dict[message.sender]['played'] = False
+                sender_audio_dict_lock.release()
         except TimeoutError:
             pass
 
 # Chat application
-def finite_state_machine(websocket, video_source, video_fps):
+def finite_state_machine(websocket, video_source, video_fps, audio_input_stream, audio_output_stream):
     global stopped_g
     reached_in_room_state = False
     state = STATE_CHOOSE_USERNAME
@@ -156,12 +219,7 @@ def finite_state_machine(websocket, video_source, video_fps):
             if not reached_in_room_state:
                 reached_in_room_state = True
                 print("The joined room ID is:", room_id)
-                # Start receiving room messages in parallel
-                receiver_thread = Thread(
-                    target=message_handler,
-                    args=(websocket, )
-                )
-                receiver_thread.start()
+                # Start input devices
                 if video_source is not None:
                     print("Started sending video")
                     send_video_thread = Thread(
@@ -169,19 +227,54 @@ def finite_state_machine(websocket, video_source, video_fps):
                         args=(websocket, video_source, video_fps, )
                     )
                     send_video_thread.start()
+                if audio_input_stream is not None:
+                    audio_input_stream.start()
+                # Start output device(s)
+                if audio_output_stream is not None:
+                    play_audio_thread = Thread(
+                        target=play_audio_in_parallel,
+                        args=(audio_output_stream, )
+                    )
+                    play_audio_thread.start()
+                # Start receiving room messages in parallel
+                receiver_thread = Thread(
+                    target=message_handler,
+                    args=(websocket, )
+                )
+                receiver_thread.start()
             content = input()  # blocks waiting for input
             send_content(websocket, content)
 
 
-def main(stream_video, server_uri, video_device, video_fps):
+def main(stream_video, stream_audio, play_audio, server_uri, video_device, video_fps, audio_device, audio_sample_size, audio_sample_rate):
     global stopped_g
     try:
-        websocket = connect(server_uri)  # establish a connection
+        websocket = None
         video_source = None
+        audio_input_stream = None
+        audio_output_stream = None
+        websocket = connect(server_uri)  # establish a connection
         if stream_video:
             print("Started capturing video")
             video_source = cv2.VideoCapture(video_device)
-        finite_state_machine(websocket, video_source, video_fps)
+        if stream_audio:
+            print("Started capturing audio")
+            audio_input_stream = sd.RawInputStream(
+                blocksize=audio_sample_size,
+                samplerate=audio_sample_rate,
+                channels=1,
+                dtype=np.int16,
+                callback=partial(audio_input_stream_cb, websocket=websocket),
+            )
+        if play_audio:
+            audio_output_stream = sd.Stream(
+                blocksize=audio_sample_size,
+                samplerate=audio_sample_rate,
+                channels=1,
+                dtype=np.float32,
+                latency=None,
+            )
+        finite_state_machine(websocket, video_source, video_fps, audio_input_stream, audio_output_stream)
     except:
         if DEBUG:
             traceback.print_exc()
@@ -189,8 +282,16 @@ def main(stream_video, server_uri, video_device, video_fps):
     finally:
         print("Closing...")
         stopped_g = True
-        websocket.close()
-        video_source.release()
+        if websocket is not None:
+            websocket.close()
+        if video_source is not None:
+            video_source.release()
+        if audio_input_stream is not None:
+            audio_input_stream.abort()  # audio_input_stream.stop()
+            audio_input_stream.close()
+        if audio_output_stream is not None:
+            audio_output_stream.abort()  # audio_output_stream.stop()
+            audio_output_stream.close()
         cv2.destroyAllWindows()
         exit()
     
@@ -202,6 +303,16 @@ def parse_args():
         "--stream-video",
         action='store_true', default=False,
         help="Wether to stream video to the room. Can still receive video"
+    )
+    ap.add_argument(
+        "--stream-audio",
+        action='store_true', default=False,
+        help="Wether to stream audio to the room. Can still receive audio"
+    )
+    ap.add_argument(
+        "--play-audio",
+        action='store_true', default=False,
+        help="Wether to play audio from the room"
     )
     ap.add_argument(
         "--server-uri",
@@ -217,6 +328,21 @@ def parse_args():
         "--video-fps",
         type=int, default=24,
         help="Video frames per second"
+    )
+    ap.add_argument(
+        "--audio-device",
+        type=str, default=None,
+        help="Which device to get the audio from"
+    )
+    ap.add_argument(
+        "--audio-sample-size",
+        type=int, default=512,
+        help="How many integers to send each time"
+    )
+    ap.add_argument(
+        "--audio-sample-rate",
+        type=int, default=16000,
+        help="Audio frames per second"
     )
     args = ap.parse_args()
     return args

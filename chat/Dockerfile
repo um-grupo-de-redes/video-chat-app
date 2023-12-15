@@ -6,7 +6,8 @@ RUN python3 -m pip install --default-timeout=300 --no-cache-dir -r /tmp/requirem
 
 COPY __init__.py .
 COPY constants.py .
-COPY img_codec.py .
+# COPY codec_img.py .
+# COPY codec_audio.py .
 COPY msgs.py .
 COPY server.py .
 

@@ -3,7 +3,8 @@
 - [Sumário](#sumário)
 - [Organização](#organização)
 - [Instalação e Execução](#instalação-e-execução)
-
+  - [Servidor](#servidor)
+  - [Cliente(s)](#clientes)
 
 # Organização
 
@@ -11,7 +12,8 @@
  * [README.md](./chat/README.md): leia-me
  * [server.py](./chat/server.py): roda o servidor.
  * [client.py](./chat/client.py): roda um cliente.
- * [img_codec.py](./chat/img_codec.py): codifica e decodifica imagens.
+ * [codec_img.py](./chat/codec_img.py): codifica e decodifica imagens.
+ * [codec_audio.py](./chat/codec_audio.py): codifica e decodifica pedaços (frames) de áudios.
  * [msgs.py](./chat/msgs.py): padroniza as mensagens JSON utilizadas por servidor e cliente(s).
  * [constants.py](./chat/constants.py): padroniza as constantes utilizadas pelo código.
  * [requirements.txt](./chat/requirements.txt): lista as bibliotecas Python utilizadas no projeto, exceto as bibliotecas padrão.
@@ -78,6 +80,9 @@ Rodar um ou mais clientes com os parâmetros adequados.
 ```bash
 # Somente chat de texto
 python3 client.py
+
+# Chat de texto, de áudio e de vídeo
+python3 client.py --stream-video --stream-audio
 
 # Usar "wss" para se conectar a um servidor rodando com certificado SSL
 python3 client.py --server-uri "wss://18.231.183.136.sslip.io"
