@@ -35,14 +35,24 @@ def send_message(websocket, message):
         pass
 
 # Specific message sending/receiving
-def check_username(websocket, username):
+def check_login(websocket, username, password):
     send_message(
         websocket=websocket,
-        message=MessageUsername(action=ACTION_CHECK_USERNAME, username=username)
+        message=MessageLogin(action=ACTION_CHECK_LOGIN, username=username, password=password)
     )
     message = receive_message(websocket)
+    if isinstance(message, MessageContent):
+        return message.content
     ok = message.boolean
     return ok  # wether the username is ok (e.g is not a duplicate)
+
+def show_rooms(websocket):
+    send_message(
+        websocket=websocket,
+        message=MessageRoom(action=ACTION_SHOW_ROOM, room_id=None)
+    )
+    message = receive_message(websocket)
+    return message.rooms
 
 def request_new_room(websocket):
     send_message(
@@ -165,42 +175,41 @@ def message_handler(websocket):
             pass
 
 # Chat application
-def finite_state_machine(websocket, video_source, video_fps, audio_input_stream, audio_output_stream):
+def finite_state_machine(websocket, video_source, video_fps, audio_input_stream, audio_output_stream, chat_active):
     global stopped_g
     reached_in_room_state = False
-    state = STATE_CHOOSE_USERNAME
+    state = STATE_LOGIN
     while not stopped_g:
-        if state == STATE_CHOOSE_USERNAME:
-            print("Choose your username:")
+        if state == STATE_LOGIN:
+            print("LOGIN")
+            print("Type your username (if you don't have one, will be created): ")
             username = input()
-            ok = check_username(websocket, username)
+            print("Type your password: ")
+            password = input()
+            ok = check_login(websocket, username, password)
+            if ok == "Incorrect password":
+                print("Error: incorrect password\n")
+                state = STATE_LOGIN
+                continue
             if not ok:
                 print("Error: choose another username\n")
-                state = STATE_CHOOSE_USERNAME
+                state = STATE_LOGIN
                 continue
             state = STATE_SHOW_OPTIONS
             continue
         elif state == STATE_SHOW_OPTIONS:
-            print("Options:")
-            print("(1) Create a room")
-            print("(2) Join an existing room")
-            option = input()
-            if option == '1':
-                state = STATE_CREATE
-                continue
-            elif option == '2':
-                state = STATE_JOIN
-                continue
-            else:
-                print("Error: invalid option\n")
-                continue
-        elif state == STATE_CREATE:
-            room_id = request_new_room(websocket=websocket)
-            if room_id is None:
-                print("Error: error creating room\n")
-                state = STATE_SHOW_OPTIONS
-                continue
-            state = STATE_IN_ROOM
+            print('\n')
+            print("Available rooms: ")
+            rooms = show_rooms(websocket=websocket)
+            if not rooms:
+                print("No available rooms!")
+                break
+            for room in rooms:
+                room_name = room['room_name']
+                room_id = room['room_id']
+                print(f'Nome da sala: {room_name}, ID da sala: {room_id}\n')
+            state = STATE_JOIN
+            continue
         elif state == STATE_JOIN:
             print("Write the room's ID:")
             room_id = input()
@@ -237,11 +246,12 @@ def finite_state_machine(websocket, video_source, video_fps, audio_input_stream,
                     )
                     play_audio_thread.start()
                 # Start receiving room messages in parallel
-                receiver_thread = Thread(
-                    target=message_handler,
-                    args=(websocket, )
-                )
-                receiver_thread.start()
+                if chat_active:
+                    receiver_thread = Thread(
+                        target=message_handler,
+                        args=(websocket, )
+                    )
+                    receiver_thread.start()
             content = input()  # blocks waiting for input
             send_content(websocket, content)
 
@@ -253,7 +263,31 @@ def main(stream_video, stream_audio, play_audio, server_uri, video_device, video
         video_source = None
         audio_input_stream = None
         audio_output_stream = None
+        valid_option = False
         websocket = connect(server_uri)  # establish a connection
+        while not valid_option:
+            print("Choose dialogue option: ")
+            print("(1) Only chat")
+            print("(2) Only stream")
+            print("(3) Both chat and stream")
+            option = input()
+            if option == '1':
+                stream_video = False
+                stream_audio = False
+                chat_active = True
+                valid_option = True
+            elif option == '2':
+                stream_video = True
+                stream_audio = True
+                chat_active = False
+                valid_option = True
+            elif option == '3':
+                stream_video = True
+                stream_audio = True
+                chat_active = True
+                valid_option = True
+            else:
+                print("Error: invalid option\n")
         if stream_video:
             print("Started capturing video")
             video_source = cv2.VideoCapture(video_device)
@@ -274,7 +308,7 @@ def main(stream_video, stream_audio, play_audio, server_uri, video_device, video
                 dtype=np.float32,
                 latency=None,
             )
-        finite_state_machine(websocket, video_source, video_fps, audio_input_stream, audio_output_stream)
+        finite_state_machine(websocket, video_source, video_fps, audio_input_stream, audio_output_stream, chat_active)
     except:
         if DEBUG:
             traceback.print_exc()

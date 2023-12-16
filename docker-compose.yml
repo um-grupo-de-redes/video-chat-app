@@ -56,6 +56,22 @@ services:
       - production_certbot_www:/var/www/certbot/:rw
       - production_certbot_conf:/etc/letsencrypt/:rw
 
+    # apache:
+      # build:
+      #   context: ./apache
+      #   dockerfile: ./Dockerfile
+      # image: httpd:latest
+      # container_name: production_apache
+      # restart: always
+      # ports:
+      #   - '80:80'
+      #   - '443:443'
+      # networks:
+      #   - web
+      # volumes:
+      #   - production_certbot_www:/usr/local/apache2/htdocs
+      #   - production_certbot_conf:/usr/local/apache2/conf
+
 networks:
   nginx-access:
     driver: bridge

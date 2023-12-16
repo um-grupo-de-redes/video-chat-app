@@ -43,10 +43,17 @@ class MessageRoom(Message):
         self.room_id = room_id
 
 
-class MessageUsername(Message):
-    def __init__(self, action, username, type_=TYPE_MESSAGE_USERNAME):
+class MessageRooms(Message):
+    def __init__(self, action, rooms, type_=TYPE_MESSAGE_ROOMS):
+        super().__init__(action=action, type_=type_)
+        self.rooms = rooms
+
+
+class MessageLogin(Message):
+    def __init__(self, action, username, password, type_=TYPE_MESSAGE_LOGIN):
         super().__init__(action=action, type_=type_)
         self.username = username
+        self.password = password
 
 
 class MessageBoolean(Message):
@@ -71,7 +78,8 @@ class MessageAudioFrame(Message):
 TYPE_TO_MSG = {
     TYPE_MESSAGE_CONTENT: MessageContent,
     TYPE_MESSAGE_ROOM: MessageRoom,
-    TYPE_MESSAGE_USERNAME: MessageUsername,
+    TYPE_MESSAGE_ROOMS: MessageRooms,
+    TYPE_MESSAGE_LOGIN: MessageLogin,
     TYPE_MESSAGE_BOOLEAN: MessageBoolean,
     TYPE_MESSAGE_IMAGE_FRAME: MessageImageFrame,
     TYPE_MESSAGE_AUDIO_FRAME: MessageAudioFrame,
