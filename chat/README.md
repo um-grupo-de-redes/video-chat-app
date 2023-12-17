@@ -78,11 +78,8 @@ python3 -m pip install -r requirements_client.txt
 Rodar um ou mais clientes com os parâmetros adequados.
 
 ```bash
-# Somente chat de texto
+# Para rodar o cliente (escolher tipo de diálogo ao iniciar)
 python3 client.py
-
-# Chat de texto, de áudio e de vídeo
-python3 client.py --stream-video --stream-audio
 
 # Usar "wss" para se conectar a um servidor rodando com certificado SSL
 python3 client.py --server-uri "wss://18.231.183.136.sslip.io"
