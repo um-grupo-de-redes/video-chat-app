@@ -8,6 +8,10 @@ from websockets.exceptions import ConnectionClosedOK
 
 from msgs import *
 
+client_dict = {}
+map_room_id_to_client_list = {}
+map_rooms = {}
+uuid_list = []
 
 class Client:
     def __init__(self, websocket, username=None, room_id=None, password=None, room_name=None):
@@ -33,8 +37,11 @@ class RoomInfo:
         }
 
 def generate_unique_id():
-    # TODO: assert is unique
-    return str(uuid.uuid4())
+    uuid_val = str(uuid.uuid4())
+    while uuid_val in uuid_list:
+        uuid_val = str(uuid.uuid4())
+    uuid_list.append(uuid_val)
+    return uuid
 
 async def send_message(websocket, message):
     message = message.to_json()
@@ -42,10 +49,6 @@ async def send_message(websocket, message):
         await websocket.send(message)
     except ConnectionClosedOK:
         pass
-
-client_dict = {}
-map_room_id_to_client_list = {}
-map_rooms = {}
 
 async def message_handler(websocket):
     client_dict[websocket] = Client(websocket)

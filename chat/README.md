@@ -93,3 +93,20 @@ python3 client.py --stream-video --video-device "test.mp4"
 # Veja mais parâmetros
 python3 client.py --help
 ```
+
+Rodar servidor versão HTTP/2.
+
+```bash
+# Para rodar o cliente
+python3 HTTP2/server.py
+```
+
+Rodar cliente versão HTTP/2.
+
+```bash
+# Para rodar o cliente
+python3 HTTP2/client.py
+
+#Para rodar o listener no cliente
+python3 HTTP2/client_listener.py
+```
