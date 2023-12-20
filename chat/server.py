@@ -3,12 +3,14 @@ import traceback
 import argparse
 
 import asyncio
+from enum import Enum
 from websockets.server import serve
 from websockets.exceptions import ConnectionClosedOK
 
 from msgs import *
 
 client_dict = {}
+map_clients = []
 map_room_id_to_client_list = {}
 map_rooms = {}
 uuid_list = []
@@ -20,6 +22,28 @@ class Client:
         self.password = password
         self.room_id = room_id
         self.room_name = room_name
+
+class ClientInfo:
+    def __init__(self, username, password, room_id=None, status=None, in_call=False):
+        self.username = username
+        self.password = password
+        self.room_id = room_id
+        self.status = status if status is not None else Status.OFFLINE.value
+        self.in_call = in_call
+
+    def to_json(self):
+        return {
+            "username": self.username,
+            "room_id": self.room_id,
+            "password": self.password,
+            "status": self.status,
+            "in_call": self.in_call
+        }
+
+class Status(Enum):
+    ONLINE = "online"
+    OFFLINE = "offline"
+    BUSY = "busy"
 
 class Room:
     def __init__(self, client_list=[]):
@@ -37,11 +61,11 @@ class RoomInfo:
         }
 
 def generate_unique_id():
-    uuid_val = str(uuid.uuid4())
+    uuid_val = uuid.uuid4()
     while uuid_val in uuid_list:
-        uuid_val = str(uuid.uuid4())
+        uuid_val = uuid.uuid4()
     uuid_list.append(uuid_val)
-    return uuid
+    return str(uuid_val)
 
 async def send_message(websocket, message):
     message = message.to_json()
@@ -77,6 +101,9 @@ async def message_handler(websocket):
                 # Create username
                 client_dict[websocket].username = message.username
                 client_dict[websocket].password = message.password
+                client_info = ClientInfo(message.username, message.password)
+                client_info = client_info.to_json()
+                map_clients.append(client_info)
                 await send_message(websocket, MessageBoolean(action=ACTION_CHECK_LOGIN, boolean=True))
             elif message.action == ACTION_SHOW_ROOM:
                 rooms_info = []
@@ -85,6 +112,34 @@ async def message_handler(websocket):
                     room_info = RoomInfo(room_id, room_name)
                     rooms_info.append(room_info.to_json())
                 await send_message(websocket, MessageRooms(action=ACTION_SHOW_ROOM, rooms=rooms_info))
+            elif message.action == ACTION_SHOW_USERS:
+                clients_info = []
+                current_username = client.username
+
+                for client_info in map_clients:
+                    if client_info["username"] != current_username:
+                        if client_info["room_id"] and not client_info["in_call"]:
+                            status = Status.ONLINE.value
+                            clients_info.append({
+                                "username": client_info["username"],
+                                "room_id": client_info["room_id"],
+                                "status": status
+                            })
+                        elif client_info["in_call"]:
+                            status = Status.BUSY.value
+                            clients_info.append({
+                                "username": client_info["username"],
+                                "room_id": client_info["room_id"],
+                                "status": status
+                            })
+                        else:
+                            status = Status.OFFLINE.value
+                            clients_info.append({
+                                "username": client_info["username"],
+                                "status": status
+                            })
+
+                await send_message(websocket, MessageUsers(action=ACTION_SHOW_USERS, users=clients_info))
             elif message.action == ACTION_CREATE_ROOM:
                 # Check if already has room_id
                 if client_dict[websocket].room_id is not None:
@@ -107,6 +162,10 @@ async def message_handler(websocket):
                 # Join room
                 map_room_id_to_client_list[message.room_id].append(client_dict[websocket])
                 client_dict[websocket].room_id = message.room_id
+                current_username = client.username
+                for client_info in map_clients:
+                    if client_info["username"] == current_username:
+                        client_info["room_id"] = message.room_id
                 await send_message(websocket, MessageBoolean(action=ACTION_JOIN_ROOM, boolean=True))
             elif message.action == ACTION_CONTENT:
                 room_id = client_dict[websocket].room_id

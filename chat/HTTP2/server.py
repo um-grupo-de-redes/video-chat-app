@@ -57,11 +57,11 @@ class RoomInfo:
         }
 
 def generate_unique_id():
-    uuid_val = str(uuid.uuid4())
+    uuid_val = uuid.uuid4()
     while uuid_val in uuid_list:
-        uuid_val = str(uuid.uuid4())
+        uuid_val = uuid.uuid4()
     uuid_list.append(uuid_val)
-    return uuid
+    return str(uuid_val)
 
 async def create_user(request):
     data = await request.json()

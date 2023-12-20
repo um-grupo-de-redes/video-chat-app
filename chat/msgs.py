@@ -49,6 +49,12 @@ class MessageRooms(Message):
         self.rooms = rooms
 
 
+class MessageUsers(Message):
+    def __init__(self, action, users, type_=TYPE_MESSAGE_USERS):
+        super().__init__(action=action, type_=type_)
+        self.users = users
+
+
 class MessageLogin(Message):
     def __init__(self, action, username, password, type_=TYPE_MESSAGE_LOGIN):
         super().__init__(action=action, type_=type_)
@@ -79,6 +85,7 @@ TYPE_TO_MSG = {
     TYPE_MESSAGE_CONTENT: MessageContent,
     TYPE_MESSAGE_ROOM: MessageRoom,
     TYPE_MESSAGE_ROOMS: MessageRooms,
+    TYPE_MESSAGE_USERS: MessageUsers,
     TYPE_MESSAGE_LOGIN: MessageLogin,
     TYPE_MESSAGE_BOOLEAN: MessageBoolean,
     TYPE_MESSAGE_IMAGE_FRAME: MessageImageFrame,

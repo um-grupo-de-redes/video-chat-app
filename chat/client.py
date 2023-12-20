@@ -49,10 +49,18 @@ def check_login(websocket, username, password):
 def show_rooms(websocket):
     send_message(
         websocket=websocket,
-        message=MessageRoom(action=ACTION_SHOW_ROOM, room_id=None)
+        message=MessageRooms(action=ACTION_SHOW_ROOM, rooms={})
     )
     message = receive_message(websocket)
     return message.rooms
+
+def show_users(websocket):
+    send_message(
+        websocket=websocket,
+        message=MessageUsers(action=ACTION_SHOW_USERS, users=None)
+    )
+    message = receive_message(websocket)
+    return message.users
 
 def request_new_room(websocket):
     send_message(
@@ -198,6 +206,38 @@ def finite_state_machine(websocket, video_source, video_fps, audio_input_stream,
             state = STATE_SHOW_OPTIONS
             continue
         elif state == STATE_SHOW_OPTIONS:
+            print('\n')
+            print("Choose your action: ")
+            print("(1) Show rooms")
+            print("(2) Show users")
+            option = input()
+            if option == '1':
+                state = STATE_SHOW_ROOMS
+                continue
+            elif option == '2':
+                state = STATE_SHOW_USERS
+                continue
+            else:
+                print("Error: invalid option\n")
+                state = STATE_SHOW_OPTIONS
+                continue
+        elif state == STATE_SHOW_USERS:
+            print('\n')
+            print("Users: ")
+            users = show_users(websocket=websocket)
+            if not users:
+                print("No users online!")
+                break
+            for user in users:
+                user_name = user['username']
+                room_id = user['room_id']
+                status = user['status']
+                print(f'Usuário: {user_name} {status}. ')
+                if room_id is not None:
+                    print(f' Na sala: {room_id}\n')
+            state = STATE_JOIN
+            continue
+        elif state == STATE_SHOW_ROOMS:
             print('\n')
             print("Available rooms: ")
             rooms = show_rooms(websocket=websocket)
