@@ -10,5 +10,6 @@ COPY constants.py .
 # COPY codec_audio.py .
 COPY msgs.py .
 COPY server.py .
+COPY utils.py .
 
 CMD ["python3", "server.py", "--ip", "0.0.0.0", "--port", "8005"]
