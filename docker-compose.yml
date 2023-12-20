@@ -22,8 +22,6 @@ services:
   #   image: production_nginx
   #   container_name: production_nginx
   #   restart: "always"
-  #   env_file:
-  #     - ./.envs/production/server_name
   #   ports:
   #     - '80:80'
   #     - "443:443/tcp"
@@ -50,9 +48,6 @@ services:
     depends_on:
       apache:
         condition: service_healthy
-    env_file:
-      - ./.envs/production/server_name
-      - ./.envs/production/email
     volumes:
       - production_certbot_www:/var/www/certbot/:rw
       - production_certbot_conf:/etc/letsencrypt/:rw
