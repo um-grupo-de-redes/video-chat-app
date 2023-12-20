@@ -12,6 +12,7 @@ from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosedOK
 
 from msgs import *
+from utils import *
 from codec_img import encode_image, decode_image
 from codec_audio import encode_audio_raw, decode_audio
 

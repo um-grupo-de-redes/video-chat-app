@@ -1,71 +1,29 @@
-import uuid
+import time
 import traceback
 import argparse
 
 import asyncio
-from enum import Enum
 from websockets.server import serve
-from websockets.exceptions import ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 from msgs import *
+from utils import *
+
+stopped_g = False
 
 client_dict = {}
 map_clients = []
 map_room_id_to_client_list = {}
 map_rooms = {}
-uuid_list = []
 
-class Client:
-    def __init__(self, websocket, username=None, room_id=None, password=None, room_name=None):
-        self.websocket = websocket
-        self.username = username
-        self.password = password
-        self.room_id = room_id
-        self.room_name = room_name
-
-class ClientInfo:
-    def __init__(self, username, password, room_id=None, status=None, in_call=False):
-        self.username = username
-        self.password = password
-        self.room_id = room_id
-        self.status = status if status is not None else Status.OFFLINE.value
-        self.in_call = in_call
-
-    def to_json(self):
-        return {
-            "username": self.username,
-            "room_id": self.room_id,
-            "password": self.password,
-            "status": self.status,
-            "in_call": self.in_call
-        }
-
-class Status(Enum):
-    ONLINE = "online"
-    OFFLINE = "offline"
-    BUSY = "busy"
-
-class Room:
-    def __init__(self, client_list=[]):
-        self.client_list = client_list
-
-class RoomInfo:
-    def __init__(self, room_id, room_name):
-        self.room_id = room_id
-        self.room_name = room_name
-
-    def to_json(self):
-        return {
-            "room_id": self.room_id,
-            "room_name": self.room_name
-        }
-
-def generate_unique_id():
-    uuid_val = uuid.uuid4()
-    while uuid_val in uuid_list:
-        uuid_val = uuid.uuid4()
-    uuid_list.append(uuid_val)
-    return str(uuid_val)
+# Basic message sending/receiving
+async def receive_message(websocket):
+    try:
+        message = await websocket.recv()
+    except ConnectionClosedOK:
+        return None
+    message = Message.from_json(message)
+    return message
 
 async def send_message(websocket, message):
     message = message.to_json()
@@ -75,11 +33,15 @@ async def send_message(websocket, message):
         pass
 
 async def message_handler(websocket):
+    global stopped_g
     client_dict[websocket] = Client(websocket)
     try:
         # TODO: maybe rate limit, at this layer, to avoid DDoS
-        async for message in websocket:
-            message = Message.from_json(message)
+        while not stopped_g:
+            message = await receive_message(websocket)
+            if message is None:
+                time.sleep(0.001)
+                continue
             if message.action == ACTION_CHECK_LOGIN:
                 # Check if username exists
                 username_exists = False
@@ -202,6 +164,10 @@ async def message_handler(websocket):
                         client.websocket,
                         MessageAudioFrame(action=ACTION_AUDIO_FRAME, sender=username, frame=message.frame)
                     )
+    except ConnectionClosedError:
+        pass
+    except KeyboardInterrupt:
+        stopped_g = True
     except:
         if DEBUG:
             traceback.print_exc()
