@@ -20,7 +20,7 @@ cp /usr/local/apache2/conf/01_http.conf.bak /usr/local/apache2/conf/01_http.conf
 echo "'/.well-known/acme-challenge/' endpoint enabled."
 
 # TODO: começar apache em paralelo
-httpd-foreground &
+nginx -g "daemon off;" &
 
 # Wait for SSL certificates before enabling HTTPS
 until [ -f ${FULLCHAIN} ]
@@ -36,7 +36,7 @@ done
 # Enable 02_https.conf
 cp /usr/local/apache2/conf/02_https.conf.bak /usr/local/apache2/conf/02_https.conf
 # TODO: reload apache
-httpd -k graceful
+nginx -s reload
 
 echo "Enabled 02_https.conf."
 
@@ -49,5 +49,5 @@ do
     # so it should be okay to reload nginx in 0h to 24h after the renew.
     sleep 24h & wait ${!}
     # TODO: reload apache
-    httpd -k graceful
+    nginx -s reload
 done

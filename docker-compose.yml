@@ -65,14 +65,15 @@ services:
     networks:
       - apache-access
     volumes:
-      - production_certbot_www:/var/www/certbot:rw
-      - production_certbot_conf:/usr/local/apache2:rw
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
-      interval: 10s
-      retries: 3
-      start_period: 20s
-      timeout: 5s
+      - production_certbot_www:/var/www/certbot:ro
+      - production_certbot_conf:/usr/local/apache2:ro
+  # TODO: healthcheck
+  #   healthcheck:
+  #     test: ps | grep "nginx" | grep "worker process" | grep -v "grep"
+  #     interval: 10s
+  #     retries: 10
+  #     start_period: 3s
+  #     timeout: 5s
 
 networks:
   apache-access:
