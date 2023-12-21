@@ -9,36 +9,35 @@ services:
     build:
       context: ./chat
       dockerfile: ./Dockerfile
-    image: production_chat
     container_name: production_chat
     restart: always
     networks:
-      - apache-access
+      - nginx-access
 
-  # nginx:
-  #   build:
-  #     context: ./nginx
-  #     dockerfile: ./Dockerfile
-  #   image: production_nginx
-  #   container_name: production_nginx
-  #   restart: "always"
-  #   env_file:
-  #     - ./.envs/production/server_name
-  #   ports:
-  #     - '80:80'
-  #     - "443:443/tcp"
-  #     # - "443:443/udp"
-  #   networks:
-  #     - apache-access
-  #   volumes:
-  #     - production_certbot_www:/var/www/certbot/:ro
-  #     - production_certbot_conf:/etc/nginx/ssl/:ro
-  #   healthcheck:
-  #     test: ps | grep "nginx" | grep "worker process" | grep -v "grep"
-  #     interval: 10s
-  #     retries: 10
-  #     start_period: 3s
-  #     timeout: 5s
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: ./Dockerfile
+    image: production_nginx
+    container_name: production_nginx
+    restart: "always"
+    env_file:
+      - ./.envs/production/server_name
+    ports:
+      - '80:80'
+      - "443:443/tcp"
+      # - "443:443/udp"
+    networks:
+      - nginx-access
+    volumes:
+      - production_certbot_www:/var/www/certbot/:ro
+      - production_certbot_conf:/etc/nginx/ssl/:ro
+    healthcheck:
+      test: ps | grep "nginx" | grep "worker process" | grep -v "grep"
+      interval: 10s
+      retries: 10
+      start_period: 3s
+      timeout: 5s
 
   certbot:
     build:
@@ -48,7 +47,7 @@ services:
     container_name: production_certbot
     restart: "always"
     depends_on:
-      apache:
+      nginx:
         condition: service_healthy
     env_file:
       - ./.envs/production/server_name
@@ -57,29 +56,22 @@ services:
       - production_certbot_www:/var/www/certbot/:rw
       - production_certbot_conf:/etc/letsencrypt/:rw
 
-  apache:
-    build:
-      context: ./apache
-      dockerfile: ./Dockerfile
-    image: production_apache
-    container_name: production_apache
-    restart: always
-    ports:
-      - '80:80'
-      - '443:443'
-    networks:
-      - apache-access
-    volumes:
-      - production_certbot_www:/var/www/certbot:ro
-      - production_certbot_conf:/usr/local/apache2:ro
-  # TODO: healthcheck
-  #   healthcheck:
-  #     test: ps | grep "nginx" | grep "worker process" | grep -v "grep"
-  #     interval: 10s
-  #     retries: 10
-  #     start_period: 3s
-  #     timeout: 5s
+    # apache:
+      # build:
+      #   context: ./apache
+      #   dockerfile: ./Dockerfile
+      # image: httpd:latest
+      # container_name: production_apache
+      # restart: always
+      # ports:
+      #   - '80:80'
+      #   - '443:443'
+      # networks:
+      #   - web
+      # volumes:
+      #   - production_certbot_www:/usr/local/apache2/htdocs
+      #   - production_certbot_conf:/usr/local/apache2/conf
 
 networks:
-  apache-access:
+  nginx-access:
     driver: bridge
