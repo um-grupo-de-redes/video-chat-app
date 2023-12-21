@@ -308,24 +308,34 @@ def main(stream_video, stream_audio, play_audio, server_uri, video_device, video
         websocket = connect(server_uri)  # establish a connection
         while not valid_option:
             print("Choose dialogue option: ")
-            print("(1) Only chat")
-            print("(2) Only stream")
-            print("(3) Both chat and stream")
+            print("(1) text + receive video")
+            print("(2) text + receive video + stream video")
+            print("(3) text + receive video + stream video + stream audio")
+            print("(4) text + receive video + stream video + stream audio + play audio")
             option = input()
             if option == '1':
+                chat_active = True
                 stream_video = False
                 stream_audio = False
-                chat_active = True
+                play_audio = False
                 valid_option = True
             elif option == '2':
+                chat_active = True
                 stream_video = True
-                stream_audio = True
-                chat_active = False
+                stream_audio = False
+                play_audio = False
                 valid_option = True
             elif option == '3':
+                chat_active = True
                 stream_video = True
                 stream_audio = True
+                play_audio = False
+                valid_option = True
+            elif option == '4':
                 chat_active = True
+                stream_video = True
+                stream_audio = True
+                play_audio = True
                 valid_option = True
             else:
                 print("Error: invalid option\n")
