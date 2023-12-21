@@ -23,6 +23,7 @@ echo "
 SERVER_NAME=example.com.br
 " | tee .envs/production/server_name
 
+# Definir email dos certificados gerados pela Let's Encrypt
 echo "
 CERT_EMAIL=example@email.com
 " | tee .envs/production/email
