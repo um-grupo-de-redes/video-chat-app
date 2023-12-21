@@ -4,8 +4,8 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-FULLCHAIN=/etc/nginx/ssl/live/leomichalski.xyz/fullchain.pem
-PRIVKEY=/etc/nginx/ssl/live/leomichalski.xyz/privkey.pem
+FULLCHAIN=/etc/nginx/ssl/live/${SERVER_NAME}/fullchain.pem
+PRIVKEY=/etc/nginx/ssl/live/${SERVER_NAME}/privkey.pem
 
 # Delete the default.conf file
 if [ -f "/etc/nginx/conf.d/default.conf" ] ; then
@@ -15,8 +15,11 @@ fi
 # Substitute placeholders with current environment variables
 export DOLLAR="$"
 
+envsubst < /etc/nginx/conf.d/01_http.conf.bak | tee /etc/nginx/conf.d/01_http.conf.bak.bak > /dev/null 2>&1
+envsubst < /etc/nginx/conf.d/02_https.conf.bak | tee /etc/nginx/conf.d/02_https.conf.bak.bak > /dev/null 2>&1
+
 # Enable "/.well-known/acme-challenge/" endpoint
-cp /etc/nginx/conf.d/01_http.conf.bak /etc/nginx/conf.d/01_http.conf
+cp /etc/nginx/conf.d/01_http.conf.bak.bak /etc/nginx/conf.d/01_http.conf
 echo "'/.well-known/acme-challenge/' endpoint enabled."
 
 nginx -g "daemon off;" &
@@ -33,7 +36,7 @@ do
 done
 
 # Enable 02_https.conf
-cp /etc/nginx/conf.d/02_https.conf.bak /etc/nginx/conf.d/02_https.conf
+cp /etc/nginx/conf.d/02_https.conf.bak.bak /etc/nginx/conf.d/02_https.conf
 nginx -s reload
 
 echo "Enabled 02_https.conf."

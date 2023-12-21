@@ -4,8 +4,8 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-FULLCHAIN=/usr/local/apache2/live/leomichalski.xyz/fullchain.pem
-PRIVKEY=/usr/local/apache2/live/leomichalski.xyz/privkey.pem
+FULLCHAIN=/usr/local/apache2/live/${SERVER_NAME}/fullchain.pem
+PRIVKEY=/usr/local/apache2/live/${SERVER_NAME}/privkey.pem
 
 # Delete the default.conf file
 if [ -f "/usr/local/apache2/conf/default.conf" ] ; then
@@ -15,8 +15,11 @@ fi
 # Substitute placeholders with current environment variables
 export DOLLAR="$"
 
+envsubst < /usr/local/apache2/conf/01_http.conf.bak | tee /usr/local/apache2/conf/01_http.conf.bak.bak > /dev/null 2>&1
+envsubst < /usr/local/apache2/conf/02_https.conf.bak | tee /usr/local/apache2/conf/02_https.conf.bak.bak > /dev/null 2>&1
+
 # Enable "/.well-known/acme-challenge/" endpoint
-cp /usr/local/apache2/conf/01_http.conf.bak /usr/local/apache2/conf/01_http.conf
+cp /usr/local/apache2/conf/01_http.conf.bak.bak /usr/local/apache2/conf/01_http.conf
 echo "'/.well-known/acme-challenge/' endpoint enabled."
 
 # TODO: começar apache em paralelo
@@ -34,7 +37,7 @@ do
 done
 
 # Enable 02_https.conf
-cp /usr/local/apache2/conf/02_https.conf.bak /usr/local/apache2/conf/02_https.conf
+cp /usr/local/apache2/conf/02_https.conf.bak.bak /usr/local/apache2/conf/02_https.conf
 # TODO: reload apache
 nginx -s reload
 
