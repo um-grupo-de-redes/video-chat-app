@@ -35,13 +35,6 @@ do
      sleep 1
 done
 
-# Wait for frontend build folder before enabling the web app
-until [ -f ${FRONTEND_BUILD}/index.html ]
-do
-     sleep 1
-done
-sleep 5
-
 # Enable 02_https.conf
 cp /etc/nginx/conf.d/02_https.conf.bak.bak /etc/nginx/conf.d/02_https.conf
 nginx -s reload
